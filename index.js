@@ -1,7 +1,7 @@
 import express from 'express'
 import cors from 'cors'
 import dotenv from 'dotenv'
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import Groq from 'groq-sdk'
 
 dotenv.config()
 
@@ -11,7 +11,7 @@ const PORT = process.env.PORT || 3000
 app.use(cors())
 app.use(express.json())
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
 
 const SYSTEM_PROMPT = `
 You are the BLECA SmartLabs Finance & Accounting assistant.
@@ -46,7 +46,7 @@ Department details you can share:
 - Instagram: https://www.instagram.com/bleca_smartlabs/
 - LinkedIn: https://www.linkedin.com/company/bleca-smartlabs
 
-Keep answers short, clear, and professional.
+Keep answers short, clear, and professional. When listing items, use short bullet points.
 `
 
 app.get('/', (req, res) => {
@@ -61,20 +61,24 @@ app.post('/chat', async (req, res) => {
       return res.status(400).json({ error: 'Message is required' })
     }
 
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-3.8-flash',
-      systemInstruction: SYSTEM_PROMPT,
+    const chatCompletion = await groq.chat.completions.create({
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: message },
+      ],
+      model: 'openai/gpt-oss-20b',
+      temperature: 0.4,
+      max_tokens: 400,
     })
 
-    const result = await model.generateContent(message)
-    const reply = result.response.text()
+    const reply =
+      chatCompletion.choices[0]?.message?.content ||
+      "I couldn't generate a response. Please try again."
 
     res.json({ reply })
   } catch (error) {
     console.error('Chat error:', error)
-    res.status(500).json({
-      error: 'Something went wrong. Please try again.',
-    })
+    res.status(500).json({ error: 'Something went wrong. Please try again.' })
   }
 })
 
